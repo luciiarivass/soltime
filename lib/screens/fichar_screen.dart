@@ -209,15 +209,33 @@ class _FicharScreenState extends State<FicharScreen> {
 
   Color _estadoColor(String estado) {
     switch (estado) {
-      case 'Finalizada':
+      case 'Aprobada':
+        return Colors.green;
+
+      case 'Rechazada':
         return Colors.red;
 
       case 'Pendiente':
         return amarillo;
 
+      case 'Finalizada':
+        return Colors.red;
+
       default:
         return const Color(0xFF0D5881);
     }
+  }
+
+  String _obtenerEstadoSolicitud(Solicitud s) {
+    if (s.aceptadatrabajador == false || s.aceptadaresponsable == false) {
+      return 'Rechazada';
+    }
+
+    if (s.aceptadatrabajador == true && s.aceptadaresponsable == true) {
+      return 'Aprobada';
+    }
+
+    return 'Pendiente';
   }
 
   @override
@@ -461,7 +479,7 @@ class _FicharScreenState extends State<FicharScreen> {
 
                                 cells: [
                                   DataCell(
-                                    _chip(s.estado ?? 'Pendiente'),
+                                    _chip(_obtenerEstadoSolicitud(s)),
                                     onTap: () => _mostrarDetalleSolicitud(s),
                                   ),
 
@@ -664,7 +682,7 @@ class _FicharScreenState extends State<FicharScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
 
             children: [
-              Text('Estado: ${s.estado ?? "-"}'),
+              Text('Estado: ${_obtenerEstadoSolicitud(s)}'),
 
               const SizedBox(height: 8),
 

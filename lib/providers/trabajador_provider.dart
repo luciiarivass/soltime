@@ -24,6 +24,8 @@ class TrabajadorProvider extends ChangeNotifier {
 
   List<Tiposolicitud> tiposSolicitudes = [];
 
+  String? codcliente;
+
   Fichaje? fichajeAbierto;
 
   Map<String, String> _headers() {
@@ -391,11 +393,115 @@ class TrabajadorProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String _formatearFechaApi(DateTime fecha) {
-    return '${fecha.year.toString().padLeft(4, '0')}-'
-        '${fecha.month.toString().padLeft(2, '0')}-'
-        '${fecha.day.toString().padLeft(2, '0')}';
+  Future<void> actualizarSolicitud(
+  Solicitud solicitud, {
+  bool esFichaje = false,
+}) async {
+  if (solicitud.idsolicitud == null) {
+    throw Exception('La solicitud no tiene id');
   }
+
+  if (apikey == null || apikey!.isEmpty) {
+    throw Exception('No hay API key activa');
+  }
+
+  final url = Uri.parse(
+    '${Config.baseUrl}/solicitudes/${solicitud.idsolicitud}',
+  );
+
+  final codclienteFinal = solicitud.codcliente?.trim().isNotEmpty == true
+      ? solicitud.codcliente!.trim()
+      : codcliente?.trim();
+
+  String estado = 'Pendiente';
+
+  if (solicitud.aceptadatrabajador == false ||
+      solicitud.aceptadaresponsable == false) {
+    estado = 'Rechazada';
+  } else if (solicitud.aceptadatrabajador == true &&
+      solicitud.aceptadaresponsable == true) {
+    estado = 'Aprobada';
+  }
+
+  try {
+    final body = <String, String>{
+      if (solicitud.idtrabajador != null)
+        'idtrabajador': solicitud.idtrabajador.toString(),
+
+      if (solicitud.idtiposolicitud != null)
+        'idtiposolicitud': solicitud.idtiposolicitud.toString(),
+
+      if (solicitud.fechainicio != null)
+        'fechainicio': _formatearFechaHoraApi(solicitud.fechainicio!),
+
+      if (solicitud.fechafin != null)
+        'fechafin': _formatearFechaHoraApi(solicitud.fechafin!),
+
+      if (codclienteFinal != null && codclienteFinal.isNotEmpty)
+        'codcliente': codclienteFinal,
+
+      if (esFichaje && solicitud.fechaHoraInicio != null)
+        'fecha_hora_inicio': _formatearFechaHoraApi(
+          solicitud.fechaHoraInicio!,
+        ),
+
+      if (esFichaje && solicitud.fechaHoraFin != null)
+        'fecha_hora_fin': _formatearFechaHoraApi(
+          solicitud.fechaHoraFin!,
+        ),
+
+      'estado': estado,
+
+      if (solicitud.aceptadaresponsable != null)
+        'aceptadaresponsable':
+            solicitud.aceptadaresponsable! ? '1' : '0',
+
+      if (solicitud.aceptadatrabajador != null)
+        'aceptadatrabajador':
+            solicitud.aceptadatrabajador! ? '1' : '0',
+
+      if (solicitud.motivo != null)
+        'motivo': solicitud.motivo!,
+
+      if (solicitud.observaciones != null)
+        'observaciones': solicitud.observaciones!,
+
+      if (solicitud.adjunto != null)
+        'adjunto': solicitud.adjunto!,
+    };
+
+    debugPrint('BODY actualizarSolicitud: $body');
+
+    final response = await http.put(
+      url,
+      headers: _formHeaders(),
+      body: body,
+    );
+
+    debugPrint('STATUS actualizarSolicitud: ${response.statusCode}');
+    debugPrint('BODY RESPONSE actualizarSolicitud: ${response.body}');
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      if (idTrabajador != null) {
+        await cargarMiArea(
+          apikey: apikey!,
+          idTrabajador: idTrabajador!,
+        );
+      }
+
+      notifyListeners();
+      return;
+    }
+
+    throw Exception(
+      'Error al actualizar solicitud (${response.statusCode}): ${response.body}',
+    );
+  } catch (e, st) {
+    debugPrint('Error en actualizarSolicitud: $e');
+    debugPrint('$st');
+    rethrow;
+  }
+}
 
   String _formatearFechaHoraApi(DateTime fecha) {
     return '${fecha.year.toString().padLeft(4, '0')}-'

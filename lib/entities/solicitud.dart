@@ -14,6 +14,8 @@ class Solicitud {
   String? motivo;
   String? estado;
   String? codcliente;
+  bool? aceptadaresponsable;
+  bool? aceptadatrabajador;
 
   Solicitud({
     this.idsolicitud,
@@ -28,6 +30,8 @@ class Solicitud {
     this.motivo,
     this.estado,
     this.codcliente,
+    this.aceptadaresponsable,
+    this.aceptadatrabajador,
   });
 
   Solicitud copyWith({
@@ -43,6 +47,8 @@ class Solicitud {
     String? motivo,
     String? estado,
     String? codcliente,
+    bool? aceptadaresponsable,
+    bool? aceptadatrabajador,
   }) {
     return Solicitud(
       idsolicitud: idsolicitud ?? this.idsolicitud,
@@ -57,6 +63,8 @@ class Solicitud {
       motivo: motivo ?? this.motivo,
       estado: estado ?? this.estado,
       codcliente: codcliente ?? this.codcliente,
+      aceptadaresponsable: aceptadaresponsable ?? this.aceptadaresponsable,
+      aceptadatrabajador: aceptadatrabajador ?? this.aceptadatrabajador,
     );
   }
 
@@ -74,6 +82,8 @@ class Solicitud {
       'motivo': motivo,
       'estado': estado,
       'codcliente': codcliente,
+      'aceptadaresponsable': aceptadaresponsable,
+      'aceptadatrabajador': aceptadatrabajador,
     };
   }
 
@@ -115,6 +125,26 @@ class Solicitud {
       return DateTime.tryParse(texto);
     }
 
+    bool? parseBool(dynamic value) {
+      if (value == null) return null;
+
+      if (value is bool) return value;
+
+      if (value is int) return value == 1;
+
+      final texto = value.toString().trim().toLowerCase();
+
+      if (texto == '1' || texto == 'true') {
+        return true;
+      }
+
+      if (texto == '0' || texto == 'false') {
+        return false;
+      }
+
+      return null;
+    }
+
     return Solicitud(
       idsolicitud: map['idsolicitud'] is int
           ? map['idsolicitud']
@@ -134,6 +164,9 @@ class Solicitud {
       motivo: map['motivo']?.toString(),
       estado: map['estado']?.toString(),
       codcliente: map['codcliente']?.toString(),
+      aceptadaresponsable: parseBool(map['aceptadaresponsable']),
+
+      aceptadatrabajador: parseBool(map['aceptadatrabajador']),
     );
   }
 
@@ -144,7 +177,7 @@ class Solicitud {
 
   @override
   String toString() {
-    return 'Solicitud(idsolicitud: $idsolicitud, idtrabajador: $idtrabajador, idtiposolicitud: $idtiposolicitud, fechainicio: $fechainicio, fechafin: $fechafin, fechaHoraInicio: $fechaHoraInicio, fechaHoraFin: $fechaHoraFin, adjunto: $adjunto, observaciones: $observaciones, motivo: $motivo, estado: $estado, codcliente: $codcliente)';
+    return 'Solicitud(idsolicitud: $idsolicitud, idtrabajador: $idtrabajador, idtiposolicitud: $idtiposolicitud, fechainicio: $fechainicio, fechafin: $fechafin, fechaHoraInicio: $fechaHoraInicio, fechaHoraFin: $fechaHoraFin, adjunto: $adjunto, observaciones: $observaciones, motivo: $motivo, estado: $estado, codcliente: $codcliente), aceptadaresponsable: $aceptadaresponsable, aceptadatrabajador: $aceptadatrabajador)';
   }
 
   @override
@@ -162,7 +195,9 @@ class Solicitud {
         other.observaciones == observaciones &&
         other.motivo == motivo &&
         other.estado == estado &&
-        other.codcliente == codcliente;
+        other.codcliente == codcliente &&
+        other.aceptadaresponsable == aceptadaresponsable &&
+        other.aceptadatrabajador == aceptadatrabajador;
   }
 
   @override
@@ -178,6 +213,8 @@ class Solicitud {
         observaciones.hashCode ^
         motivo.hashCode ^
         estado.hashCode ^
-        codcliente.hashCode;
+        codcliente.hashCode ^
+        aceptadaresponsable.hashCode ^
+        aceptadatrabajador.hashCode;
   }
 }

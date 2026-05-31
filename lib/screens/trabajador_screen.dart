@@ -17,7 +17,9 @@ class TrabajadorScreen extends StatelessWidget {
     final trabajador = context.watch<TrabajadorProvider>();
 
     final info = trabajador.miInfo;
-
+    final solicitudesPendientes = trabajador.misSolicitudes.where((s) {
+      return s.aceptadaresponsable == true && s.aceptadatrabajador == null;
+    }).length;
     final nombre = info?.nombre ?? '';
 
     return Scaffold(
@@ -167,7 +169,7 @@ class TrabajadorScreen extends StatelessWidget {
                         return;
                       }
 
-                      context.read<AuthProvider>().logout();
+                      context.read<AuthProvider>().restaurarSesion();
 
                       context.read<TrabajadorProvider>().clear();
 
@@ -271,14 +273,41 @@ class TrabajadorScreen extends StatelessWidget {
                             ),
                           ),
 
-                          Text(
-                            'SOLICITUD',
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (solicitudesPendientes > 0)
+                                Container(
+                                  width: 24.w,
+                                  height: 24.w,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    solicitudesPendientes > 9
+                                        ? '9+'
+                                        : '$solicitudesPendientes',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11.sp,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
 
-                            style: TextStyle(
-                              fontSize: 27.sp,
-                              letterSpacing: 3,
-                              fontWeight: FontWeight.w500,
-                            ),
+                              SizedBox(width: 10.w),
+
+                              Text(
+                                'SOLICITUD',
+                                style: TextStyle(
+                                  fontSize: 27.sp,
+                                  letterSpacing: 3,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
 
                           Positioned(
