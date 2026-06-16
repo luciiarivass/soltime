@@ -21,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
 
-  static const Color amarillo = Color(0xFFFAC02E);
 
   @override
   void dispose() {
@@ -142,16 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     color: const Color(0xFF888888),
                   ),
-
-                  children: const [
-                    TextSpan(text: '¿Olvidaste tu contraseña?'),
-
-                    TextSpan(
-                      text: '*',
-
-                      style: TextStyle(color: amarillo),
-                    ),
-                  ],
                 ),
               ),
             ),

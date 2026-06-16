@@ -13,29 +13,29 @@ import '../entities/trabajador.dart';
 class TrabajadorProvider extends ChangeNotifier {
   String? apikey;
   int? idTrabajador;
-
   bool cargando = false;
-
   Trabajador? miInfo;
-
   List<Fichaje> misFichajes = [];
-
   List<Solicitud> misSolicitudes = [];
-
   List<Tiposolicitud> tiposSolicitudes = [];
-
   String? codcliente;
-
   Fichaje? fichajeAbierto;
 
+  static const String _apiToken = 'TIDGZWcDtmkVu5ugzip6';
+
   Map<String, String> _headers() {
-    return {'Host': 'solpem.facturascripts.local', 'Token': apikey ?? ''};
+    return {
+      'Host': 'solpem.facturascripts.local',
+      'Token': _apiToken,
+      if (apikey != null && apikey!.isNotEmpty) 'X-App-Token': apikey!,
+    };
   }
 
   Map<String, String> _formHeaders() {
     return {
       'Host': 'solpem.facturascripts.local',
-      'Token': apikey ?? '',
+      'Token': _apiToken,
+      if (apikey != null && apikey!.isNotEmpty) 'X-App-Token': apikey!,
       'Content-Type': 'application/x-www-form-urlencoded',
     };
   }
@@ -46,81 +46,57 @@ class TrabajadorProvider extends ChangeNotifier {
     required String apikey,
     required int idTrabajador,
   }) async {
-    print('========== CARGAR MI AREA ==========');
-
     this.apikey = apikey;
     this.idTrabajador = idTrabajador;
 
     cargando = true;
     notifyListeners();
 
+    final url = Uri.parse('${Config.baseUrl}/app');
+
     try {
-      final url = Uri.parse(
-        '${Config.baseUrl}/trabajadorporid?idtrabajador=$idTrabajador',
-      );
-
-      print('URL -> $url');
-
-      print('HEADERS -> ${_headers()}');
-
       final response = await http.get(url, headers: _headers());
 
-      print('STATUS -> ${response.statusCode}');
-
-      print('BODY -> ${response.body}');
+      debugPrint('STATUS cargarMiArea: ${response.statusCode}');
+      debugPrint('BODY cargarMiArea: ${response.body}');
 
       if (response.statusCode != 200) {
-        throw Exception('Error cargando trabajador');
+        throw Exception('Error cargando datos: ${response.body}');
       }
 
       final data = json.decode(response.body) as Map<String, dynamic>;
 
-      print('JSON OK');
+      final info = data['info'] as Map<String, dynamic>?;
 
-      miInfo = data['info'] != null ? Trabajador.fromMap(data['info']) : null;
+      miInfo = info != null ? Trabajador.fromMap(info) : null;
+      codcliente = miInfo?.codcliente?.toString().trim();
 
-      print('TRABAJADOR -> ${miInfo?.idtrabajador}');
+      misFichajes = (data['fichajes'] as List? ?? [])
+          .map((row) => Fichaje.fromMap(row as Map<String, dynamic>))
+          .toList();
 
-      misFichajes = data['fichajes'] != null
-          ? (data['fichajes'] as List).map((e) => Fichaje.fromMap(e)).toList()
-          : [];
+      misSolicitudes = (data['solicitudes'] as List? ?? [])
+          .map((row) => Solicitud.fromMap(row as Map<String, dynamic>))
+          .toList();
 
-      print('FICHAJES -> ${misFichajes.length}');
-
-      misSolicitudes = data['solicitudes'] != null
-          ? (data['solicitudes'] as List)
-                .map((e) => Solicitud.fromMap(e))
-                .toList()
-          : [];
-
-      print('SOLICITUDES -> ${misSolicitudes.length}');
+      tiposSolicitudes = (data['tipossolicitudes'] as List? ?? [])
+          .map((row) => Tiposolicitud.fromMap(row as Map<String, dynamic>))
+          .toList();
 
       misFichajes.sort((a, b) {
-        final fa = a.fecha_hora_entrada ?? DateTime(1900);
-
-        final fb = b.fecha_hora_entrada ?? DateTime(1900);
-
-        return fb.compareTo(fa);
+        final fechaA = a.fecha_hora_entrada ?? DateTime(1900);
+        final fechaB = b.fecha_hora_entrada ?? DateTime(1900);
+        return fechaB.compareTo(fechaA);
       });
 
       _actualizarFichajeAbierto();
-
-      print('FICHAJE ABIERTO -> ${fichajeAbierto?.idfichaje}');
-
-      if (tiposSolicitudes.isEmpty) {
-        await getTiposolicitudes();
-      }
-
-      print('========== OK ==========');
-    } catch (e) {
-      print('ERROR cargarMiArea -> $e');
-
-      rethrow;
-    } finally {
-      cargando = false;
-
-      notifyListeners();
+    } catch (e, st) {
+      debugPrint('Error en cargarMiArea: $e');
+      debugPrint('$st');
     }
+
+    cargando = false;
+    notifyListeners();
   }
 
   Future<void> getTiposolicitudes() async {
@@ -159,7 +135,7 @@ class TrabajadorProvider extends ChangeNotifier {
   }) async {
     if (apikey == null || apikey!.isEmpty) return;
 
-    final url = Uri.parse('${Config.baseUrl}/fichajes');
+    final url = Uri.parse('${Config.baseUrl}/app-fichaje');
 
     try {
       final response = await http.post(
@@ -168,7 +144,7 @@ class TrabajadorProvider extends ChangeNotifier {
         body: {
           'idtrabajador': idtrabajador.toString(),
           'codcliente': codcliente,
-          'fecha_hora_salida': 'null',
+          'fecha_hora_entrada': _formatearFechaHoraApi(DateTime.now()),
           if (idcentro != null) 'idcentro': idcentro.toString(),
           if (foto != null && foto.trim().isNotEmpty) 'foto': foto.trim(),
           if (geolocalizacion != null && geolocalizacion.trim().isNotEmpty)
@@ -195,102 +171,118 @@ class TrabajadorProvider extends ChangeNotifier {
   }
 
   Future<void> ficharSalida() async {
-    if (apikey == null || apikey!.isEmpty) return;
-    if (fichajeAbierto?.idfichaje == null) return;
+  if (apikey == null || apikey!.isEmpty) return;
+  if (fichajeAbierto?.idfichaje == null) return;
 
-    final url = Uri.parse(
-      '${Config.baseUrl}/fichajes/${fichajeAbierto!.idfichaje}',
+  final url = Uri.parse('${Config.baseUrl}/app-fichaje');
+
+  final body = {
+    'idfichaje': fichajeAbierto!.idfichaje.toString(),
+    'fecha_hora_salida': _formatearFechaHoraApi(DateTime.now()),
+  };
+
+  try {
+    final response = await http.put(
+      url,
+      headers: _formHeaders(),
+      body: body,
     );
 
-    final ahora = DateTime.now();
+    debugPrint('URL SALIDA -> $url');
+    debugPrint('BODY SALIDA -> $body');
+    debugPrint('STATUS ficharSalida: ${response.statusCode}');
+    debugPrint('BODY ficharSalida: ${response.body}');
 
-    final fechaFormateada =
-        '${ahora.year.toString().padLeft(4, '0')}-'
-        '${ahora.month.toString().padLeft(2, '0')}-'
-        '${ahora.day.toString().padLeft(2, '0')} '
-        '${ahora.hour.toString().padLeft(2, '0')}:'
-        '${ahora.minute.toString().padLeft(2, '0')}:'
-        '${ahora.second.toString().padLeft(2, '0')}';
-
-    try {
-      final response = await http.put(
-        url,
-        headers: _formHeaders(),
-        body: {'fecha_hora_salida': fechaFormateada},
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      await cargarMiArea(
+        apikey: apikey!,
+        idTrabajador: idTrabajador!,
       );
 
-      print('URL SALIDA -> $url');
-      print('BODY ENVIADO -> $fechaFormateada');
-      print('STATUS SALIDA -> ${response.statusCode}');
-      print('BODY SALIDA -> ${response.body}');
-      debugPrint('STATUS ficharSalida: ${response.statusCode}');
-      debugPrint('BODY ficharSalida: ${response.body}');
+      notifyListeners();
+      return;
+    }
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (idTrabajador != null) {
-          await cargarMiArea(apikey: apikey!, idTrabajador: idTrabajador!);
-        }
-      } else {
-        debugPrint('Error al fichar salida: ${response.statusCode}');
-      }
-    } catch (e, st) {
-      debugPrint('Error en ficharSalida: $e');
-      debugPrint('$st');
+    throw Exception(
+      'Error al fichar salida (${response.statusCode}): ${response.body}',
+    );
+  } catch (e, st) {
+    debugPrint('Error en ficharSalida: $e');
+    debugPrint('$st');
+    rethrow;
+  }
+}
+
+void _actualizarFichajeAbierto() {
+  fichajeAbierto = null;
+
+  for (final f in misFichajes) {
+    if (f.fecha_hora_salida == null) {
+      fichajeAbierto = f;
+      break;
     }
   }
+}
 
-  void _actualizarFichajeAbierto() {
-    fichajeAbierto = null;
-
-    for (final f in misFichajes) {
-      if (f.fecha_hora_salida == null) {
-        fichajeAbierto = f;
-        break;
-      }
-    }
-  }
-
-  Future<void> crearSolicitud(
+Future<void> crearSolicitud(
   Solicitud solicitud, {
   bool esFichaje = false,
   File? fichero,
 }) async {
-  final uri = Uri.parse('${Config.baseUrl}/solicitudes');
+  final uri = Uri.parse('${Config.baseUrl}/app-solicitud');
 
   String formatearFecha(DateTime? fecha) {
     if (fecha == null) return '';
     return DateFormat('yyyy-MM-dd').format(fecha);
   }
 
+  final codclienteFinal = solicitud.codcliente?.trim().isNotEmpty == true
+      ? solicitud.codcliente!.trim()
+      : codcliente?.trim();
+
   try {
     final request = http.MultipartRequest('POST', uri);
 
     request.headers.addAll(_formHeaders());
 
-    if (solicitud.estado?.trim().isNotEmpty == true) {
-      request.fields['estado'] = solicitud.estado!.trim();
+    request.fields['estado'] = solicitud.estado?.trim().isNotEmpty == true
+        ? solicitud.estado!.trim()
+        : 'Pendiente';
+
+    if (solicitud.aceptadaresponsable != null) {
+      request.fields['aceptadaresponsable'] =
+          solicitud.aceptadaresponsable! ? '1' : '0';
+    }
+
+    if (solicitud.aceptadatrabajador != null) {
+      request.fields['aceptadatrabajador'] =
+          solicitud.aceptadatrabajador! ? '1' : '0';
     }
 
     if (solicitud.fechainicio != null) {
-      request.fields['fechainicio'] =
-          formatearFecha(solicitud.fechainicio);
+      request.fields['fechainicio'] = formatearFecha(solicitud.fechainicio);
+    } else if (esFichaje && solicitud.fechaHoraInicio != null) {
+      request.fields['fechainicio'] = formatearFecha(
+        solicitud.fechaHoraInicio,
+      );
     }
 
     if (solicitud.fechafin != null) {
-      request.fields['fechafin'] =
-          formatearFecha(solicitud.fechafin);
+      request.fields['fechafin'] = formatearFecha(solicitud.fechafin);
+    } else if (esFichaje && solicitud.fechaHoraFin != null) {
+      request.fields['fechafin'] = formatearFecha(
+        solicitud.fechaHoraFin,
+      );
     }
 
     if (esFichaje && solicitud.fechaHoraInicio != null) {
-      request.fields['fecha_hora_inicio'] =
-          _formatearFechaHoraApi(
+      request.fields['fecha_hora_inicio'] = _formatearFechaHoraApi(
         solicitud.fechaHoraInicio!,
       );
     }
 
     if (esFichaje && solicitud.fechaHoraFin != null) {
-      request.fields['fecha_hora_fin'] =
-          _formatearFechaHoraApi(
+      request.fields['fecha_hora_fin'] = _formatearFechaHoraApi(
         solicitud.fechaHoraFin!,
       );
     }
@@ -301,30 +293,30 @@ class TrabajadorProvider extends ChangeNotifier {
     }
 
     if (solicitud.idtrabajador != null) {
-      request.fields['idtrabajador'] =
-          solicitud.idtrabajador.toString();
+      request.fields['idtrabajador'] = solicitud.idtrabajador.toString();
     }
 
-    if (solicitud.codcliente?.trim().isNotEmpty == true) {
-      request.fields['codcliente'] =
-          solicitud.codcliente!.trim();
+    if (codclienteFinal != null && codclienteFinal.isNotEmpty) {
+      request.fields['codcliente'] = codclienteFinal;
     }
 
     if (solicitud.motivo?.trim().isNotEmpty == true) {
-      request.fields['motivo'] =
-          solicitud.motivo!.trim();
+      request.fields['motivo'] = solicitud.motivo!.trim();
     }
 
     if (solicitud.observaciones?.trim().isNotEmpty == true) {
-      request.fields['observaciones'] =
-          solicitud.observaciones!.trim();
+      request.fields['observaciones'] = solicitud.observaciones!.trim();
     }
 
-    // ADJUNTO OPCIONAL
+    if (solicitud.adjunto?.trim().isNotEmpty == true) {
+      request.fields['adjunto'] = solicitud.adjunto!.trim();
+    }
+
     if (fichero != null) {
       final mimeType =
-          lookupMimeType(fichero.path) ??
-              'application/octet-stream';
+          lookupMimeType(fichero.path) ?? 'application/octet-stream';
+
+      final partesMime = mimeType.split('/');
 
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -332,68 +324,59 @@ class TrabajadorProvider extends ChangeNotifier {
           fichero.path,
           filename: fichero.path.split('/').last,
           contentType: http.MediaType(
-            mimeType.split('/')[0],
-            mimeType.split('/')[1],
+            partesMime[0],
+            partesMime.length > 1 ? partesMime[1] : 'octet-stream',
           ),
         ),
       );
-
-      print('FICHERO: ${fichero.path}');
     }
 
-    print('FIELDS: ${request.fields}');
-    print('FILES: ${request.files.length}');
+    debugPrint('URL crearSolicitud -> $uri');
+    debugPrint('FIELDS crearSolicitud -> ${request.fields}');
+    debugPrint('FILES crearSolicitud -> ${request.files.length}');
 
     final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
 
-    final response =
-        await http.Response.fromStream(streamed);
+    debugPrint('STATUS crearSolicitud: ${response.statusCode}');
+    debugPrint('BODY crearSolicitud: ${response.body}');
 
-    print('STATUS: ${response.statusCode}');
-    print('RESPONSE: ${response.body}');
-
-    if (response.statusCode == 200 ||
-        response.statusCode == 201) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       await cargarMiArea(
         apikey: apikey!,
         idTrabajador: idTrabajador!,
       );
 
       notifyListeners();
-
       return;
     }
 
     throw Exception(
-      'Error al crear solicitud '
-      '(${response.statusCode}): '
-      '${response.body}',
+      'Error al crear solicitud (${response.statusCode}): ${response.body}',
     );
   } catch (e, st) {
-    print('Error en crearSolicitud: $e');
-    print(st);
+    debugPrint('Error en crearSolicitud: $e');
+    debugPrint('$st');
     rethrow;
   }
 }
 
-  void clear() {
-    apikey = null;
-    idTrabajador = null;
+void clear() {
+  apikey = null;
+  idTrabajador = null;
 
-    miInfo = null;
+  miInfo = null;
+  misFichajes = [];
+  misSolicitudes = [];
+  tiposSolicitudes = [];
+  fichajeAbierto = null;
+  cargando = false;
+  codcliente = null;
 
-    misFichajes = [];
+  notifyListeners();
+}
 
-    misSolicitudes = [];
-
-    tiposSolicitudes = [];
-
-    fichajeAbierto = null;
-
-    notifyListeners();
-  }
-
-  Future<void> actualizarSolicitud(
+Future<void> actualizarSolicitud(
   Solicitud solicitud, {
   bool esFichaje = false,
 }) async {
@@ -405,9 +388,7 @@ class TrabajadorProvider extends ChangeNotifier {
     throw Exception('No hay API key activa');
   }
 
-  final url = Uri.parse(
-    '${Config.baseUrl}/solicitudes/${solicitud.idsolicitud}',
-  );
+  final url = Uri.parse('${Config.baseUrl}/app-solicitud');
 
   final codclienteFinal = solicitud.codcliente?.trim().isNotEmpty == true
       ? solicitud.codcliente!.trim()
@@ -425,6 +406,8 @@ class TrabajadorProvider extends ChangeNotifier {
 
   try {
     final body = <String, String>{
+      'idsolicitud': solicitud.idsolicitud.toString(),
+
       if (solicitud.idtrabajador != null)
         'idtrabajador': solicitud.idtrabajador.toString(),
 
@@ -432,10 +415,10 @@ class TrabajadorProvider extends ChangeNotifier {
         'idtiposolicitud': solicitud.idtiposolicitud.toString(),
 
       if (solicitud.fechainicio != null)
-        'fechainicio': _formatearFechaHoraApi(solicitud.fechainicio!),
+        'fechainicio': _formatearFechaApi(solicitud.fechainicio!),
 
       if (solicitud.fechafin != null)
-        'fechafin': _formatearFechaHoraApi(solicitud.fechafin!),
+        'fechafin': _formatearFechaApi(solicitud.fechafin!),
 
       if (codclienteFinal != null && codclienteFinal.isNotEmpty)
         'codcliente': codclienteFinal,
@@ -460,16 +443,15 @@ class TrabajadorProvider extends ChangeNotifier {
         'aceptadatrabajador':
             solicitud.aceptadatrabajador! ? '1' : '0',
 
-      if (solicitud.motivo != null)
-        'motivo': solicitud.motivo!,
+      if (solicitud.motivo != null) 'motivo': solicitud.motivo!,
 
       if (solicitud.observaciones != null)
         'observaciones': solicitud.observaciones!,
 
-      if (solicitud.adjunto != null)
-        'adjunto': solicitud.adjunto!,
+      if (solicitud.adjunto != null) 'adjunto': solicitud.adjunto!,
     };
 
+    debugPrint('URL actualizarSolicitud: $url');
     debugPrint('BODY actualizarSolicitud: $body');
 
     final response = await http.put(
@@ -479,15 +461,15 @@ class TrabajadorProvider extends ChangeNotifier {
     );
 
     debugPrint('STATUS actualizarSolicitud: ${response.statusCode}');
-    debugPrint('BODY RESPONSE actualizarSolicitud: ${response.body}');
+    debugPrint('BODY actualizarSolicitud: ${response.body}');
 
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      if (idTrabajador != null) {
-        await cargarMiArea(
-          apikey: apikey!,
-          idTrabajador: idTrabajador!,
-        );
-      }
+    if (response.statusCode == 200 ||
+        response.statusCode == 201 ||
+        response.statusCode == 204) {
+      await cargarMiArea(
+        apikey: apikey!,
+        idTrabajador: idTrabajador!,
+      );
 
       notifyListeners();
       return;
@@ -503,12 +485,18 @@ class TrabajadorProvider extends ChangeNotifier {
   }
 }
 
-  String _formatearFechaHoraApi(DateTime fecha) {
-    return '${fecha.year.toString().padLeft(4, '0')}-'
-        '${fecha.month.toString().padLeft(2, '0')}-'
-        '${fecha.day.toString().padLeft(2, '0')} '
-        '${fecha.hour.toString().padLeft(2, '0')}:'
-        '${fecha.minute.toString().padLeft(2, '0')}:'
-        '${fecha.second.toString().padLeft(2, '0')}';
-  }
+String _formatearFechaApi(DateTime fecha) {
+  return '${fecha.year.toString().padLeft(4, '0')}-'
+      '${fecha.month.toString().padLeft(2, '0')}-'
+      '${fecha.day.toString().padLeft(2, '0')}';
+}
+
+String _formatearFechaHoraApi(DateTime fecha) {
+  return '${fecha.year.toString().padLeft(4, '0')}-'
+      '${fecha.month.toString().padLeft(2, '0')}-'
+      '${fecha.day.toString().padLeft(2, '0')} '
+      '${fecha.hour.toString().padLeft(2, '0')}:'
+      '${fecha.minute.toString().padLeft(2, '0')}:'
+      '${fecha.second.toString().padLeft(2, '0')}';
+}
 }
